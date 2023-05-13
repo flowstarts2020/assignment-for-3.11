@@ -32,7 +32,7 @@ on:
 
 env:            
   AWS_REGION: us-east-1           
-  ECR_REPOSITORY: jazeel-node-app       
+  ECR_REPOSITORY: alan-node-app       
   ECS_SERVICE: ecsdemo-frontend          
   ECS_CLUSTER: ecs-tf                     
   CONTAINER_NAME: ecs-sample         
