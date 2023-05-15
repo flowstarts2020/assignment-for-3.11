@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: deploy-to-ecs
 
 on:
   push:
@@ -6,27 +6,26 @@ on:
       - main
 
 env:
-  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-  IMAGE_NAME: my-app
-  TAG: latest
+  AWS_REGION: <your-aws-region>
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  ECR_REPOSITORY: <your-ecr-repository-name>
+  ECS_CLUSTER: <your-ecs-cluster-name>
+  ECS_SERVICE: <your-ecs-service-name>
 
 jobs:
-  deploy:
-    name: Deploy to ECS
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v2
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -35,16 +34,30 @@ jobs:
       - name: Build and tag Docker image
         id: build-image
         run: |
-          docker build -t $ECR_REGISTRY/$IMAGE_NAME:$TAG .
-          echo "::set-output name=image::$ECR_REGISTRY/$IMAGE_NAME:$TAG"
+          docker build -t $ECR_REPOSITORY .
+          echo "::set-output name=image-tag::$(echo $GITHUB_SHA | cut -c1-7)"
 
       - name: Push Docker image to Amazon ECR
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.build-image.outputs.image }}
-
-      - name: Update ECS service
+        id: push-image
         run: |
-          aws ecs update-service --cluster my-cluster --service my-service --force-new-deployment
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REPOSITORY:$GITHUB_SHA
+          docker push $ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REPOSITORY:$GITHUB_SHA
+        env:
+          IMAGE_TAG: ${{ steps.build-image.outputs.image-tag }}
+
+      - name: Update ECS Task Definition
+        id: update-task-definition
+        uses: aws-actions/amazon-ecs-update-task-definition@v1
+        with:
+          family: $ECS_SERVICE
+          container-name: <your-container-name>
+          image: $ECR_REPOSITORY:$GITHUB_SHA
+
+      - name: Update ECS Service
+        id: update-service
+        uses: aws-actions/amazon-ecs-deploy-service@v1
+        with:
+          cluster: $ECS_CLUSTER
+          service: $ECS_SERVICE
+          task-definition: ${{ steps.update-task-definition.outputs.task-definition-arn }}
