@@ -33,7 +33,7 @@ on:
 env:            
   AWS_REGION: ap-southeast-1           
   ECR_REPOSITORY: alan-node-app       
-  ECS_SERVICE: ecsdemo-frontend          
+  ECS_SERVICE: sctp-cloud-infra           
   ECS_CLUSTER: ecs-tf                     
   CONTAINER_NAME: ecs-sample         
                                                
